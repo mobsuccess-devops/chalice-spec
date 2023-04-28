@@ -1,8 +1,4 @@
-from typing import Optional
-from urllib.parse import urljoin
-
 from apispec import BasePlugin, APISpec
-from chalice import Blueprint
 from pydantic import BaseModel
 
 from chalice_spec.docs import Docs, Operation
