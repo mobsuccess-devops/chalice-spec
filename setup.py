@@ -20,7 +20,7 @@ setuptools.setup(
     version="0.4.0",
     author="Mobsuccess",
     author_email=MAINTAINER,
-    description="mobsuccess python data-access library",
+    description="mobsuccess python chalice spec library",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/mobsuccess-devops/chalice-spec",
