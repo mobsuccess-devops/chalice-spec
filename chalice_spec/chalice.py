@@ -10,7 +10,9 @@ from chalice_spec import Docs, Operation
 from chalice_spec.docs import trim_docstring
 
 
-def default_docs_for_methods(methods: List[str]):
+def default_docs_for_methods(
+    methods: List[str], content_types: Optional[List[str]] = None
+):
     """
     Generate default documentation if desired.
 
@@ -19,6 +21,7 @@ def default_docs_for_methods(methods: List[str]):
     return Docs(
         **{
             method: Operation(
+                content_types=content_types,
                 response=BaseModel,
                 request=(
                     None
@@ -37,18 +40,23 @@ class BlueprintWithSpec(Blueprint):
     enable easy OpenAPI documentation.
     """
 
-    def __init__(self, import_name: str) -> None:
+    def __init__(self, import_name: str, tags=None) -> None:
         self._chalice_spec_docs = []
+        self._chalice_spec_tags = tags
         super(BlueprintWithSpec, self).__init__(import_name)
 
     def route(self, path: str, **kwargs: Any) -> Callable[..., Any]:
-        docs: Docs = kwargs.pop("docs", None)
+        def route_decorator(func):
+            docs: Docs = kwargs.pop("docs", None)
 
-        if docs:
             methods = [method.lower() for method in kwargs.get("methods", ["get"])]
-            self._chalice_spec_docs.append((path, methods, docs))
+            content_types = kwargs.get("content_types", ["application/json"])
 
-        return super(BlueprintWithSpec, self).route(path, **kwargs)
+            self._chalice_spec_docs.append((path, methods, content_types, docs, func))
+
+            return super(BlueprintWithSpec, self).route(path, **kwargs)(func)
+
+        return route_decorator
 
 
 class ChaliceWithSpec(Chalice):
@@ -78,11 +86,70 @@ class ChaliceWithSpec(Chalice):
         # and so on!
     """
 
-    def __init__(self, app_name: str, spec: APISpec, generate_default_docs=False):
-        super().__init__(app_name)
+    def __init__(
+        self, app_name: str, spec: APISpec, generate_default_docs=False, **kwargs
+    ):
+        super().__init__(app_name, **kwargs)
 
         self.__spec = spec
         self.__generate_default_docs = generate_default_docs
+
+    def decorate(self, docs, path, methods, content_types, func, tags) -> None:
+        if docs is None and self.__generate_default_docs:
+            docs = default_docs_for_methods(methods, content_types)
+
+        if docs:
+            operations = docs.build_operations(self.__spec, methods, content_types)
+
+            # Infer path parameters
+            get_params = r"{([^}]+)}"
+            path_params = []
+            for param in re.findall(get_params, path):
+                path_params.append(
+                    {
+                        "in": "path",
+                        "name": param,
+                        "schema": {"type": "string"},
+                        "required": True,
+                    }
+                )
+
+            # Infer tags
+            for operation in operations:
+                if (
+                    "tags" not in operations[operation]
+                    or operations[operation]["tags"] is None
+                ):
+                    if tags:
+                        operations[operation]["tags"] = tags
+                    else:
+                        operations[operation]["tags"] = [
+                            "/" + path.lstrip("/").split("/", 1)[0]
+                        ]
+
+            # Infer summary and description from route docstrings
+            if func.__doc__:
+                split_docstring = trim_docstring(func.__doc__).split("\n", 1)
+                for operation in operations:
+                    if (
+                        "summary" not in operations[operation]
+                        or operations[operation]["summary"] is None
+                    ):
+                        operations[operation]["summary"] = split_docstring[0]
+                    if (
+                        "description" not in operations[operation]
+                        or operations[operation]["description"] is None
+                    ) and len(split_docstring) == 2:
+                        operations[operation]["description"] = split_docstring[
+                            1
+                        ].strip()
+
+            self.__spec.path(
+                path,
+                operations=operations,
+                summary=docs.summary,
+                parameters=path_params,
+            )
 
     def register_blueprint(
         self,
@@ -91,15 +158,23 @@ class ChaliceWithSpec(Chalice):
         url_prefix: Optional[str] = None,
     ) -> None:
         if isinstance(blueprint, BlueprintWithSpec):
-            for path, methods, docs in blueprint._chalice_spec_docs:
+            for (
+                path,
+                methods,
+                content_types,
+                docs,
+                func,
+            ) in blueprint._chalice_spec_docs:
                 path = (url_prefix if url_prefix else "") + path
 
-                if docs is None and self.__generate_default_docs:
-                    docs = default_docs_for_methods(methods)
-
-                if docs:
-                    operations = docs.build_operations(self.__spec, methods)
-                    self.__spec.path(path, operations=operations, summary=docs.summary)
+                self.decorate(
+                    docs,
+                    path,
+                    methods,
+                    content_types,
+                    func,
+                    blueprint._chalice_spec_tags,
+                )
 
         return super(ChaliceWithSpec, self).register_blueprint(
             blueprint, name_prefix=name_prefix, url_prefix=url_prefix
@@ -109,59 +184,9 @@ class ChaliceWithSpec(Chalice):
         def route_decorator(func):
             docs: Docs = kwargs.pop("docs", None)
             methods = [method.lower() for method in kwargs.get("methods", ["get"])]
+            content_types = kwargs.pop("content_types", None)
 
-            if docs is None and self.__generate_default_docs:
-                docs = default_docs_for_methods(methods)
-
-            if docs:
-                operations = docs.build_operations(self.__spec, methods)
-
-                # Infer path parameters
-                get_params = r"{([^}]+)}"
-                path_params = []
-                for param in re.findall(get_params, path):
-                    path_params.append(
-                        {
-                            "in": "path",
-                            "name": param,
-                            "schema": {"type": "string"},
-                            "required": True,
-                        }
-                    )
-
-                # Infer tags
-                for operation in operations:
-                    if (
-                        "tags" not in operations[operation]
-                        or operations[operation]["tags"] is None
-                    ):
-                        operations[operation]["tags"] = [
-                            "/" + path.lstrip("/").split("/", 1)[0]
-                        ]
-
-                # Infer summary and description from route docstrings
-                if func.__doc__:
-                    split_docstring = trim_docstring(func.__doc__).split("\n", 1)
-                    for operation in operations:
-                        if (
-                            "summary" not in operations[operation]
-                            or operations[operation]["summary"] is None
-                        ):
-                            operations[operation]["summary"] = split_docstring[0]
-                        if (
-                            "description" not in operations[operation]
-                            or operations[operation]["description"] is None
-                        ) and len(split_docstring) == 2:
-                            operations[operation]["description"] = split_docstring[
-                                1
-                            ].strip()
-
-                self.__spec.path(
-                    path,
-                    operations=operations,
-                    summary=docs.summary,
-                    parameters=path_params,
-                )
+            self.decorate(docs, path, methods, content_types, func, None)
 
             return super(ChaliceWithSpec, self).route(path, **kwargs)(func)
 
