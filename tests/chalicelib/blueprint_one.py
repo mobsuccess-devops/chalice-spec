@@ -1,5 +1,3 @@
-from chalice import Blueprint
-
 from chalice_spec import Docs
 from chalice_spec.chalice import BlueprintWithSpec
 from tests.schema import TestSchema

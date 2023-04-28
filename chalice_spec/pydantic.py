@@ -1,6 +1,6 @@
 from typing import Any, Union
 
-from apispec import BasePlugin, APISpec
+from apispec import APISpec, BasePlugin
 from apispec.exceptions import DuplicateComponentNameError
 from pydantic import BaseModel
 

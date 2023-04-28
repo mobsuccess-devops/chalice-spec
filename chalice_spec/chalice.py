@@ -1,13 +1,13 @@
 import re
-
-from chalice_spec.docs import trim_docstring
-from chalice_spec import Docs, Operation
-from typing import Any, Callable, Optional, Union, List
+from typing import Any, Callable, List, Optional, Union
 
 from apispec import APISpec
 from chalice import Blueprint
 from chalice.app import Chalice
 from pydantic import BaseModel
+
+from chalice_spec import Docs, Operation
+from chalice_spec.docs import trim_docstring
 
 
 def default_docs_for_methods(methods: List[str]):

@@ -2,9 +2,9 @@ import pytest
 from apispec import APISpec
 
 from chalice_spec.chalice import ChaliceWithSpec
-from chalice_spec.docs import Docs, Resp, Op
+from chalice_spec.docs import Docs, Op, Resp
 from chalice_spec.pydantic import PydanticPlugin
-from tests.schema import TestSchema, AnotherSchema
+from tests.schema import AnotherSchema, TestSchema
 
 
 def setup_test():
