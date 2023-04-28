@@ -1,4 +1,4 @@
-from apispec import BasePlugin, APISpec
+from apispec import APISpec, BasePlugin
 from pydantic import BaseModel
 
 from chalice_spec.docs import Docs, Operation

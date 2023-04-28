@@ -1,5 +1,5 @@
 import sys
-from typing import Type, Optional, Union, List, Dict
+from typing import Dict, List, Optional, Type, Union
 
 from apispec import APISpec
 from pydantic import BaseModel

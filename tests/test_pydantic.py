@@ -1,7 +1,7 @@
 from apispec import APISpec
 
 from chalice_spec.pydantic import PydanticPlugin
-from tests.schema import TestSchema, NestedSchema
+from tests.schema import NestedSchema, TestSchema
 
 
 def test_pydantic():
